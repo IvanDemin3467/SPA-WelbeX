@@ -1,6 +1,9 @@
-from flask import Flask, jsonify, request
-from flask_cors import CORS
+from __future__ import annotations
 import uuid
+
+from flask import Flask, jsonify, request
+
+from myrepository import *
 
 BOOKS = [
     {
@@ -47,63 +50,117 @@ TABLE = [
 # configuration
 DEBUG = True
 
-# instantiate the app
-app = Flask(__name__)
-app.config.from_object(__name__)
 
-# enable CORS
-CORS(app, resources={r'/*': {'origins': '*'}})
-
-
-# sanity check route
-@app.route('/ping', methods=['GET'])
-def ping_pong():
-    return jsonify('pong!')
+"""
+Начало работы REST API сервиса
+"""
+app = Flask(__name__)  # инициализация объекта, с которым сможет работать WSGI сервер
+app.config['SECRET_KEY'] = 'gh5ng843bh68hfi4nfc6h3ndh4xc53b56lk89gm4bf2gc6ehm'  # произвольная случайная длинная строка
+repo = RepositoryCreator.create()  # инициализация репозитория
 
 
-def remove_book(book_id):
-    for book in BOOKS:
-        if book['id'] == book_id:
-            BOOKS.remove(book)
-            return True
-    return False
+@app.route('/user/<int:user_id>', methods=['GET'])
+def get_user(user_id: int) -> (str, int):
+    """
+    Точка входа для запроса на получение записи пользователя по id. Пример запроса:
+    curl http://localhost:80/user/2
+    :param user_id: целочисленное значение id пользователя
+    :return: если пользователь найден в базе, то возвращает json с данными пользователя и код 200,
+             иначе возвращает код 404
+             Формат возвращаемого значения: {"id": user_id, "title": title}
+    """
+    entity = repo.get(user_id)
+    if entity == []:
+        return "Rejected. No user with id=" + str(user_id), 404
+    return jsonify(entity), 200
 
 
-@app.route('/books', methods=['GET', 'POST'])
-def all_books():
-    response_object = {'status': 'success'}
-    if request.method == 'POST':
-        post_data = request.get_json()
-        BOOKS.append({
-            'id': uuid.uuid4().hex,
-            'title': post_data.get('title'),
-            'author': post_data.get('author'),
-            'read': post_data.get('read')
-        })
-        response_object['message'] = 'Book added!'
-    else:
-        response_object['books'] = BOOKS
-    return jsonify(response_object)
+@app.route('/user', methods=['GET'])
+def get_users() -> (str, int):
+    """
+    Точка входа для запроса на получение записи пользователя по id. Пример запроса:
+    curl http://localhost:80/users
+    :return: если база не пуста, то возвращает json с данными пользователей и код 200,
+             иначе возвращает код 404
+             Формат возвращаемого значения: [{"id": user_id1, "title": title1}, {"id": user_id2, "title": title2}]
+    """
+    entities_list = repo.list()
+    if not entities_list:
+        return "Rejected. DB is empty", 404
+    return jsonify(entities_list), 200
 
 
-@app.route('/books/<book_id>', methods=['PUT', 'DELETE'])
-def single_book(book_id):
-    response_object = {'status': 'success'}
-    if request.method == 'PUT':
-        post_data = request.get_json()
-        remove_book(book_id)
-        BOOKS.append({
-            'id': uuid.uuid4().hex,
-            'title': post_data.get('title'),
-            'author': post_data.get('author'),
-            'read': post_data.get('read')
-        })
-        response_object['message'] = 'Book updated!'
-    if request.method == 'DELETE':
-        remove_book(book_id)
-        response_object['message'] = 'Book removed!'
-    return jsonify(response_object)
+@app.route('/user/<int:user_id>', methods=['POST'])
+def add_user(user_id: int) -> (str, int):
+    """
+    Точка входа для запроса на добавление записи пользователя по id. Пример запроса:
+    curl -X POST http://localhost:80/user/3?title=Mikhail%20Vasilevich%20Lomonosov
+    :param user_id: целочисленное значение id пользователя
+    :аргумент запроса title: строковое значение ФИО пользователя
+    :return: если пользователь существует в базе, то не создаёт пользователя и возвращает код 422,
+             иначе создаёт и возвращает код 204
+    """
+    title = request.args.get('title')
+    entity = {'title': title, 'id': user_id}
+    if repo.add(entity) == -1:
+        return "Rejected. User with id=" + str(user_id) + " already exists", 422
+    return 'Success. User created', 204
+
+
+@app.route('/user/<int:user_id>', methods=['DELETE'])
+def del_user(user_id: int) -> (str, int):
+    """
+    Точка входа для запроса на удаление записи пользователя по id. Пример запроса:
+    curl -X DELETE http://localhost:80/user/3
+    :param user_id: целочисленное значение id пользователя
+    :return: если пользователь не существует в базе, то возвращает код 422,
+             иначе удаляет его и возвращает код 204
+    """
+    if repo.delete(user_id) == -1:
+        return "Rejected. No user with id=" + str(user_id), 404
+    return 'Success. User deleted', 204
+
+
+@app.route('/user/<int:user_id>', methods=['PATCH'])
+def upd_user(user_id: int) -> (str, int):
+    """
+    Точка входа для запроса на изменение записи пользователя по id. Пример запроса:
+    curl -X PATCH http://localhost:80/user/3?title=Aleksandr%20Sergeevich%20Pushkin
+    :param user_id: целочисленное значение id пользователя
+    :аргумент запроса title: строковое значение ФИО пользователя
+    :return: если пользователь не существует в базе, то возвращает код 422,
+             иначе изменяет его данные и возвращает код 204
+    """
+    title = request.args.get('title')
+    entity = {'title': title, 'id': user_id}
+    result = repo.update(entity)
+    if result == -1:
+        return "Rejected. No user with id=" + str(user_id), 404
+    return 'Success. User updated', 204
 
 
 if __name__ == '__main__':
-    app.run()
+    """
+    Тестовый запуск сервиса. Активируется только при непосредственном запуске приложения.
+    При запуске через WSGI-сервер этот блок игнорируется
+    """
+    entity = {'id': 1, 'title': 'title'}
+    repo.add(entity)
+    print(repo.list())
+    entity = {'id': 3, 'title': "rty"}
+    repo.add(entity)
+    print(repo.list())
+
+    print(repo.list())
+
+    repo.delete(1)
+    print(repo.list())
+
+    entity = {'id': 3, 'title': "123"}
+    repo.update(entity)
+    print(repo.list())
+
+    repo.delete(3)
+    print(repo.list())
+
+    app.run(host="127.0.0.1", port=80)
