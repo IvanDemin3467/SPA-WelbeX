@@ -3,6 +3,7 @@ from __future__ import annotations
 import json  # to read options from file
 import sys  # for repository factory (it creates class by name (string))
 import psycopg2
+from psycopg2.extras import RealDictCursor
 
 import time
 
@@ -40,6 +41,7 @@ OPTIONS_FILE_PATH = "options.json"
 DB_NAME = "postgres"
 TABLE_NAME = "sample_table"
 HOST_NAME = "localhost"
+ENTITY_TEMPLATE = {'id': -1, 'title': 'filler'}
 
 
 # Repository start
@@ -48,6 +50,8 @@ class AbstractRepository(ABC):
     Абстрактный репозиторий для работы с сущностями Entity
     Предполагает реализацию методов get(), list(), add(), delete(), update()
     """
+    template = ENTITY_TEMPLATE
+    template_keys = list(ENTITY_TEMPLATE.keys())
 
     @abstractmethod
     def get(self, reference) -> dict:
@@ -288,13 +292,12 @@ class RepositoryPostgres(AbstractRepository):
         """
         Простая инициализация
         :param options: словарь параметров. Для данного репозитория используются параметры username, password
-        :param fact: фабрика сущностей. Используется при необходимости создать сущность, возвращаемую из репозитория
         """
         self.__options = options  # Сохранить настройки
-        self.__init_db()  # Инициализировать базу данных
+        # self.__init_db()  # Инициализировать базу данных
         self._cache = {}  # Инициализировать простой кэш
 
-    def __get_db_connection(self) -> connect:
+    def __get_db_connection(self) -> psycopg2.connect:
         """
         Вспомогательная процедура для создания подключения к базе данных, расположенной на локальном компьютере.
         В качестве параметров использует логин и пароль, хранимые в словаре __options.
@@ -321,7 +324,7 @@ class RepositoryPostgres(AbstractRepository):
         Использует передачу именованных параметров для противостояния атакам SQL injection
         Если при вызове передан небезопасный запрос, то исключения не возникает
         :param query: строка запроса к базе, отформатированная в соответствии со стандартами MySQL
-        :param user_id: целочисленное значение id сущности для передачи в качестве параметра в запрос
+        :param entity_id: целочисленное значение id сущности для передачи в качестве параметра в запрос
         :param title: строковое значение заголовка сущности для передачи в качестве параметра в запрос
         :return: возвращает ответ от базы данных.
         Это может быть список словарей с параметрами сущностей в случае запроса SELECT,
@@ -330,20 +333,16 @@ class RepositoryPostgres(AbstractRepository):
         """
         try:
             conn = self.__get_db_connection()  # Создать подключение
-            cur = conn.cursor()
-            cur.execute(query, {'entity_id': entity_id, 'title': title})
-            print(query, entity_id, title)
-            results = cur.fetchall()  # <class 'tuple'>: (1,)
-            print(results)
-            conn.commit()
-            cur.close()
-            conn.close()
-            # with conn.cursor(dictionary=True) as cursor:  # параметр dictionary указывает, что курсор возвращает словари
-            #     cursor.execute(query, {'entity_id': entity_id, 'title': title})  # выполнить запрос безопасным образом
-            #     results = cursor.fetchall()  # получить результаты выполнения
-            #     cursor.close()  # вручную закрыть курсор
-            # conn.commit()  # вручную указать, что транзакции завершены
-            # conn.close()  # вручную закрыть соединение
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(query, {'entity_id': entity_id, 'title': title})  # выполнить запрос безопасным образом
+                print(query, entity_id, title)
+                results = cur.fetchall()  # получить результаты выполнения
+                results = json.dumps(results)
+                results = json.loads(results)
+                print(results)
+                cur.close()  # вручную закрыть курсор
+            conn.commit()  # вручную указать, что транзакции завершены
+            conn.close()  # вручную закрыть соединение
             return results
         except BaseException as err:
             print(f"Error with db: {err}")
@@ -356,16 +355,16 @@ class RepositoryPostgres(AbstractRepository):
         """
         # results = self.__make_query(
         #     f"CREATE DATABASE {DB_NAME};")  # создать базу с именем DB_NAME, если не существует
-        # print(results)
-        # results = results = self.__make_query(f"DROP TABLE IF EXISTS {TABLE_NAME};")  # удаляем таблицу из предыдущих запусков
-        # print(results)
+        results = self.__make_query(f"DROP TABLE {TABLE_NAME};")  # удаляем таблицу из предыдущих запусков
+        print(results)
         # далее создать таблицу.
         #   id: целочисленное без автоматического инкремента
         #   title: строковое с максимальной длинной 255
-        # results = self.__make_query(f"""CREATE TABLE {TABLE_NAME} (
-        #                    id INTEGER PRIMARY KEY,
-        #                    title VARCHAR(255) NOT NULL);""")
-        # print(results)
+        results = self.__make_query(f"""CREATE TABLE {TABLE_NAME} 
+                                        (id SERIAL PRIMARY KEY, 
+                                        {self.template_keys[1]} VARCHAR(255) NOT NULL)
+                                        """)
+        print(results)
         return 0
 
     def __clear_cache(self) -> None:
@@ -389,9 +388,10 @@ class RepositoryPostgres(AbstractRepository):
             results = self.__make_query(f"SELECT * FROM {TABLE_NAME} WHERE id = %(entity_id)s", entity_id=entity_id)
             self._cache[key] = results
 
-        if results is None:
+        try:
+            return results[0]
+        except IndexError:
             return {}
-        return results
 
     def list(self) -> list[dict]:
         """
@@ -409,12 +409,10 @@ class RepositoryPostgres(AbstractRepository):
         :param entity: сущность с заполненными параметрами
         :return: если сущность с таким id не существует, то возвращает 0, иначе возвращает -1
         """
-        if self.get(entity["id"]) == []:
-            self.__make_query(f"INSERT INTO {TABLE_NAME} (id, title) VALUES (%(entity_id)s, %(title)s) RETURNING id;",
+        if self.get(entity["id"]) == {}:
+            self.__make_query(f"""INSERT INTO {TABLE_NAME} (id, {self.template_keys[1]}) 
+                              VALUES (%(entity_id)s, %({self.template_keys[1]})s) RETURNING id;""",
                               entity_id=entity["id"], title=entity["title"])
-            # print(f"INSERT INTO {TABLE_NAME} (id, title) VALUES ({entity['id']}, '{entity['title']}');")
-            # result = self.__make_query(f"INSERT INTO {TABLE_NAME} (id, title) VALUES ({entity['id']}, \'{entity['title']}\')")
-            # print(result)
             self.__clear_cache()
             return 0
         return -1
@@ -422,10 +420,10 @@ class RepositoryPostgres(AbstractRepository):
     def delete(self, entity_id: int) -> int:
         """
         Удаляет одну сущность из репозитория по id
-        :param user_id: целочисленное значение id сущности
+        :param entity_id: целочисленное значение id сущности
         :return: если сущность с таким id существует на момент удаления, то возвращает 0, иначе возвращает -1
         """
-        if self.get(entity_id) != []:
+        if self.get(entity_id) != {}:
             self.__make_query(f"DELETE FROM {TABLE_NAME} WHERE id = %(entity_id)s RETURNING id;", entity_id=entity_id)
             self.__clear_cache()
             return 0
@@ -437,8 +435,7 @@ class RepositoryPostgres(AbstractRepository):
         :param entity: сущность с заполненными параметрами
         :return: если сущность с таким id существует, то возвращает обновляет её и возвращает 0, иначе возвращает -1
         """
-        if self.get(entity["id"]) != []:
-            print("success")
+        if self.get(entity["id"]) != {}:
             self.__make_query(f"UPDATE {TABLE_NAME} SET title = %(title)s WHERE id = %(entity_id)s RETURNING id;",
                               entity_id=entity["id"], title=entity["title"])
             self.__clear_cache()
@@ -450,6 +447,7 @@ class AbstractRepositoryCreator(ABC):
     """
     Это интерфейс к фабрике репозиториев. Предполагает реализацию только одного классового метода create()
     """
+    template = ENTITY_TEMPLATE
 
     @classmethod
     @abstractmethod
@@ -502,7 +500,6 @@ class RepositoryCreator(AbstractRepositoryCreator):
     def create(cls) -> AbstractRepository:
         """
         Выбирает тип используемого репозитория в зависимости от параметра repo_type, полученного из файла
-        :param fact: фабрика сущностей; передаётся репозиторию
         :return: инстанс выбранного репозитория
         """
         options = cls.__get_options()

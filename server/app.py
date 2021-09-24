@@ -146,7 +146,7 @@ if __name__ == '__main__':
     """
     entity = {'id': 1, 'title': 'title'}
     repo.add(entity)
-    print(repo.list())
+    print(repo.get(1))
     entity = {'id': 3, 'title': "rty"}
     repo.add(entity)
     print(repo.list())
