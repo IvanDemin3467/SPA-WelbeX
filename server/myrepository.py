@@ -41,7 +41,7 @@ OPTIONS_FILE_PATH = "options.json"
 DB_NAME = "postgres"
 TABLE_NAME = "sample_table"
 HOST_NAME = "localhost"
-ENTITY_TEMPLATE = {'id': -1, 'title': 'filler'}
+ENTITY_TEMPLATE = {'id': -1, 'title': 'filler', 'amount': 0}
 
 
 # Repository start
@@ -414,8 +414,7 @@ class RepositoryPostgres(AbstractRepository):
         if key in self._cache:
             results = self._cache[key]
         else:
-            params = self.template
-            params["id"] = entity_id
+            params = self.get_template(entity_id=entity_id)
             results = self.__make_query(f"SELECT * FROM {TABLE_NAME} WHERE id = %(id)s", params)
             self._cache[key] = results
 
@@ -446,9 +445,6 @@ class RepositoryPostgres(AbstractRepository):
             self.__make_query(f"""INSERT INTO {TABLE_NAME} ({keys}) 
                               VALUES ({values}) RETURNING id;""",
                               entity=entity)
-            # self.__make_query(f"""INSERT INTO {TABLE_NAME} (id, {self.template_keys[1]})
-            #                               VALUES (%(id)s, %({self.template_keys[1]})s) RETURNING id;""",
-            #                   entity=entity)
             self.__clear_cache()
             return 0
         return -1
@@ -460,8 +456,7 @@ class RepositoryPostgres(AbstractRepository):
         :return: если сущность с таким id существует на момент удаления, то возвращает 0, иначе возвращает -1
         """
         if self.get(entity_id) != {}:
-            params = self.template
-            params["id"] = entity_id
+            params = self.get_template(entity_id=entity_id)
             self.__make_query(f"DELETE FROM {TABLE_NAME} WHERE id = %(id)s RETURNING id;", entity=params)
             self.__clear_cache()
             return 0
