@@ -472,7 +472,7 @@ class RepositoryPostgres(AbstractRepository):
             keys = self.__format_keys_no_id(entity)
             values = self.__format_values_no_id(entity)
             self.__make_query(f"""UPDATE {TABLE_NAME} 
-                                SET {keys} = {values} 
+                                SET ({keys}) = ({values}) 
                                 WHERE id = %(id)s RETURNING id;""",
                               entity=entity)
             self.__clear_cache()

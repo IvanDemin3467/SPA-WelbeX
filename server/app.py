@@ -70,7 +70,7 @@ def get_user(user_id: int) -> (str, int):
              Формат возвращаемого значения: {"id": user_id, "title": title}
     """
     entity = repo.get(user_id)
-    if entity == []:
+    if entity == {}:
         return "Rejected. No user with id=" + str(user_id), 404
     return jsonify(entity), 200
 
