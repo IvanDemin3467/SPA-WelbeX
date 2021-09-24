@@ -144,10 +144,11 @@ if __name__ == '__main__':
     Тестовый запуск сервиса. Активируется только при непосредственном запуске приложения.
     При запуске через WSGI-сервер этот блок игнорируется
     """
-    entity = {'id': 1, 'title': 'title'}
+
+    entity = repo.get_template(1, "qwe")
     repo.add(entity)
     print(repo.get(1))
-    entity = {'id': 3, 'title': "rty"}
+    entity = repo.get_template(3, "rty")
     repo.add(entity)
     print(repo.list())
 
@@ -156,7 +157,7 @@ if __name__ == '__main__':
     repo.delete(1)
     print(repo.list())
 
-    entity = {'id': 3, 'title': "123"}
+    entity = repo.get_template(3, "123")
     repo.update(entity)
     print(repo.list())
 

@@ -73,6 +73,12 @@ class AbstractRepository(ABC):
     def update(self, reference) -> int:
         raise NotImplementedError
 
+    def get_template(self, entity_id=0, par1="filer") -> dict:
+        result = self.template.copy()
+        result["id"] = entity_id
+        result[self.template_keys[1]] = par1
+        return result
+
 
 class RepositoryBytearray(AbstractRepository):
     """
@@ -324,8 +330,7 @@ class RepositoryPostgres(AbstractRepository):
         Использует передачу именованных параметров для противостояния атакам SQL injection
         Если при вызове передан небезопасный запрос, то исключения не возникает
         :param query: строка запроса к базе, отформатированная в соответствии со стандартами MySQL
-        :param entity_id: целочисленное значение id сущности для передачи в качестве параметра в запрос
-        :param title: строковое значение заголовка сущности для передачи в качестве параметра в запрос
+        :param entity: словарь с параметрами сущности; содержит целочисленное значение id
         :return: возвращает ответ от базы данных.
         Это может быть список словарей с параметрами сущностей в случае запроса SELECT,
             либо пустая строка в других случаях
@@ -335,7 +340,7 @@ class RepositoryPostgres(AbstractRepository):
             conn = self.__get_db_connection()  # Создать подключение
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(query, entity)  # выполнить запрос безопасным образом
-                print(query, entity["id"], entity["title"])
+                print(query, entity)
                 results = cur.fetchall()  # получить результаты выполнения
                 results = json.dumps(results)
                 results = json.loads(results)
@@ -374,6 +379,30 @@ class RepositoryPostgres(AbstractRepository):
         """
         self._cache = {}
 
+    @staticmethod
+    def __format_keys(entity: dict) -> str:
+        keys = ", ".join(list(entity.keys()))
+        # print(keys)
+        return keys
+
+    @staticmethod
+    def __format_values(entity: dict) -> str:
+        values = "%(" + ")s, %(".join(list(entity.keys())) + ")s"
+        # print(values)
+        return values
+
+    @staticmethod
+    def __format_keys_no_id(entity: dict) -> str:
+        keys = ", ".join(list(entity.keys())[1:])
+        # print(keys)
+        return keys
+
+    @staticmethod
+    def __format_values_no_id(entity: dict) -> str:
+        values = "%(" + ")s, %(".join(list(entity.keys())[1:]) + ")s"
+        # print(values)
+        return values
+
     def get(self, entity_id: int) -> dict:
         """
         Возвращает одного пользователя по id.
@@ -411,10 +440,15 @@ class RepositoryPostgres(AbstractRepository):
         :param entity: сущность с заполненными параметрами
         :return: если сущность с таким id не существует, то возвращает 0, иначе возвращает -1
         """
+        keys = self.__format_keys(entity)
+        values = self.__format_values(entity)
         if self.get(entity["id"]) == {}:
-            self.__make_query(f"""INSERT INTO {TABLE_NAME} (id, {self.template_keys[1]}) 
-                              VALUES (%(id)s, %({self.template_keys[1]})s) RETURNING id;""",
+            self.__make_query(f"""INSERT INTO {TABLE_NAME} ({keys}) 
+                              VALUES ({values}) RETURNING id;""",
                               entity=entity)
+            # self.__make_query(f"""INSERT INTO {TABLE_NAME} (id, {self.template_keys[1]})
+            #                               VALUES (%(id)s, %({self.template_keys[1]})s) RETURNING id;""",
+            #                   entity=entity)
             self.__clear_cache()
             return 0
         return -1
@@ -440,9 +474,11 @@ class RepositoryPostgres(AbstractRepository):
         :return: если сущность с таким id существует, то возвращает обновляет её и возвращает 0, иначе возвращает -1
         """
         if self.get(entity["id"]) != {}:
+            keys = self.__format_keys_no_id(entity)
+            values = self.__format_values_no_id(entity)
             self.__make_query(f"""UPDATE {TABLE_NAME} 
-                                SET {self.template_keys[1]} = %({self.template_keys[1]})s 
-                                WHERE id = %(entity_id)s RETURNING id;""",
+                                SET {keys} = {values} 
+                                WHERE id = %(id)s RETURNING id;""",
                               entity=entity)
             self.__clear_cache()
             return 0
