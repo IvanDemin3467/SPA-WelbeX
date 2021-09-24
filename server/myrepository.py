@@ -318,7 +318,7 @@ class RepositoryPostgres(AbstractRepository):
             print(err)
             return None
 
-    def __make_query(self, query: str, entity_id=0, title="") -> list:
+    def __make_query(self, query: str, entity=ENTITY_TEMPLATE) -> list:
         """
         Вспомогательная процедура для создания запросов к базе данных
         Использует передачу именованных параметров для противостояния атакам SQL injection
@@ -334,8 +334,8 @@ class RepositoryPostgres(AbstractRepository):
         try:
             conn = self.__get_db_connection()  # Создать подключение
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute(query, {'entity_id': entity_id, 'title': title})  # выполнить запрос безопасным образом
-                print(query, entity_id, title)
+                cur.execute(query, entity)  # выполнить запрос безопасным образом
+                print(query, entity["id"], entity["title"])
                 results = cur.fetchall()  # получить результаты выполнения
                 results = json.dumps(results)
                 results = json.loads(results)
@@ -385,7 +385,9 @@ class RepositoryPostgres(AbstractRepository):
         if key in self._cache:
             results = self._cache[key]
         else:
-            results = self.__make_query(f"SELECT * FROM {TABLE_NAME} WHERE id = %(entity_id)s", entity_id=entity_id)
+            params = self.template
+            params["id"] = entity_id
+            results = self.__make_query(f"SELECT * FROM {TABLE_NAME} WHERE id = %(id)s", params)
             self._cache[key] = results
 
         try:
@@ -411,8 +413,8 @@ class RepositoryPostgres(AbstractRepository):
         """
         if self.get(entity["id"]) == {}:
             self.__make_query(f"""INSERT INTO {TABLE_NAME} (id, {self.template_keys[1]}) 
-                              VALUES (%(entity_id)s, %({self.template_keys[1]})s) RETURNING id;""",
-                              entity_id=entity["id"], title=entity["title"])
+                              VALUES (%(id)s, %({self.template_keys[1]})s) RETURNING id;""",
+                              entity=entity)
             self.__clear_cache()
             return 0
         return -1
@@ -424,7 +426,9 @@ class RepositoryPostgres(AbstractRepository):
         :return: если сущность с таким id существует на момент удаления, то возвращает 0, иначе возвращает -1
         """
         if self.get(entity_id) != {}:
-            self.__make_query(f"DELETE FROM {TABLE_NAME} WHERE id = %(entity_id)s RETURNING id;", entity_id=entity_id)
+            params = self.template
+            params["id"] = entity_id
+            self.__make_query(f"DELETE FROM {TABLE_NAME} WHERE id = %(id)s RETURNING id;", entity=params)
             self.__clear_cache()
             return 0
         return -1
@@ -436,8 +440,10 @@ class RepositoryPostgres(AbstractRepository):
         :return: если сущность с таким id существует, то возвращает обновляет её и возвращает 0, иначе возвращает -1
         """
         if self.get(entity["id"]) != {}:
-            self.__make_query(f"UPDATE {TABLE_NAME} SET title = %(title)s WHERE id = %(entity_id)s RETURNING id;",
-                              entity_id=entity["id"], title=entity["title"])
+            self.__make_query(f"""UPDATE {TABLE_NAME} 
+                                SET {self.template_keys[1]} = %({self.template_keys[1]})s 
+                                WHERE id = %(entity_id)s RETURNING id;""",
+                              entity=entity)
             self.__clear_cache()
             return 0
         return -1
