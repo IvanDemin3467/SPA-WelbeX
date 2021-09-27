@@ -41,7 +41,12 @@ OPTIONS_FILE_PATH = "options.json"
 DB_NAME = "postgres"
 TABLE_NAME = "sample_table"
 HOST_NAME = "localhost"
-ENTITY_TEMPLATE = {'id': -1, 'title': 'filler', 'amount': 0}
+ENTITY_TEMPLATE = {'id': -1,
+                   'title': 'Y Combinator',
+                   'url': 'http://ycombinator.com',
+                   'created_at': '2006-10-09T18:21:51.000Z',
+                   'points': 0,
+                   'num_comments': 0}
 
 
 # Repository start

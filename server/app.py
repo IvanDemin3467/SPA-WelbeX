@@ -50,7 +50,6 @@ TABLE = [
 # configuration
 DEBUG = True
 
-
 """
 Начало работы REST API сервиса
 """
@@ -146,22 +145,32 @@ if __name__ == '__main__':
     """
 
     entity = repo.get_template(1, "qwe")
+    '''entity = {'id': 1,
+              'title': 'Y Combinator',
+              'url': 'http://ycombinator.com',
+              'created_at': '2006-10-09T18:21:51.000Z',
+              'points': 57,
+              'num_comments': 0}'''
     repo.add(entity)
     print(repo.get(1))
     entity = repo.get_template(3, "rty")
+    '''entity = {'id': 2,
+              'title': 'Build your own React',
+              'url': 'https://pomb.us/build-your-own-react/',
+              'created_at': '2019-11-13T18:21:51.000Z',
+              'points': 1478,
+              'num_comments': 108}'''
     repo.add(entity)
-    print(repo.list())
-
     print(repo.list())
 
     repo.delete(1)
     print(repo.list())
 
-    entity = repo.get_template(3, "123")
+    entity = repo.get_template(2, "123")
     repo.update(entity)
     print(repo.list())
 
-    repo.delete(3)
+    repo.delete(2)
     print(repo.list())
 
     app.run(host="127.0.0.1", port=80)
