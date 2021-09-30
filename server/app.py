@@ -58,24 +58,24 @@ app.config['SECRET_KEY'] = 'gh5ng843bh68hfi4nfc6h3ndh4xc53b56lk89gm4bf2gc6ehm'  
 repo = RepositoryCreator.create()  # инициализация репозитория
 
 
-@app.route('/user/<int:user_id>', methods=['GET'])
-def get_user(user_id: int) -> (str, int):
+@app.route('/user/<int:entity_id>', methods=['GET'])
+def get_entity(entity_id: int) -> (str, int):
     """
     Точка входа для запроса на получение записи пользователя по id. Пример запроса:
     curl http://localhost:80/user/2
-    :param user_id: целочисленное значение id пользователя
+    :param entity_id: целочисленное значение id пользователя
     :return: если пользователь найден в базе, то возвращает json с данными пользователя и код 200,
              иначе возвращает код 404
              Формат возвращаемого значения: {"id": user_id, "title": title}
     """
-    entity = repo.get(user_id)
+    entity = repo.get(entity_id)
     if entity == {}:
-        return "Rejected. No user with id=" + str(user_id), 404
+        return "Rejected. No entity with id=" + str(entity_id), 404
     return jsonify(entity), 200
 
 
 @app.route('/user', methods=['GET'])
-def get_users() -> (str, int):
+def list_entities() -> (str, int):
     """
     Точка входа для запроса на получение записи пользователя по id. Пример запроса:
     curl http://localhost:80/users
@@ -89,52 +89,52 @@ def get_users() -> (str, int):
     return jsonify(entities_list), 200
 
 
-@app.route('/user/<int:user_id>', methods=['POST'])
-def add_user(user_id: int) -> (str, int):
+@app.route('/user/<int:entity_id>', methods=['POST'])
+def add_entity(entity_id: int) -> (str, int):
     """
     Точка входа для запроса на добавление записи пользователя по id. Пример запроса:
     curl -X POST http://localhost:80/user/3?title=Mikhail%20Vasilevich%20Lomonosov
-    :param user_id: целочисленное значение id пользователя
+    :param entity_id: целочисленное значение id пользователя
     :аргумент запроса title: строковое значение ФИО пользователя
     :return: если пользователь существует в базе, то не создаёт пользователя и возвращает код 422,
              иначе создаёт и возвращает код 204
     """
     title = request.args.get('title')
-    entity = {'title': title, 'id': user_id}
+    entity = {'title': title, 'id': entity_id}
     if repo.add(entity) == -1:
-        return "Rejected. User with id=" + str(user_id) + " already exists", 422
+        return "Rejected. User with id=" + str(entity_id) + " already exists", 422
     return 'Success. User created', 204
 
 
-@app.route('/user/<int:user_id>', methods=['DELETE'])
-def del_user(user_id: int) -> (str, int):
+@app.route('/user/<int:entity_id>', methods=['DELETE'])
+def del_entity(entity_id: int) -> (str, int):
     """
     Точка входа для запроса на удаление записи пользователя по id. Пример запроса:
     curl -X DELETE http://localhost:80/user/3
-    :param user_id: целочисленное значение id пользователя
+    :param entity_id: целочисленное значение id пользователя
     :return: если пользователь не существует в базе, то возвращает код 422,
              иначе удаляет его и возвращает код 204
     """
-    if repo.delete(user_id) == -1:
-        return "Rejected. No user with id=" + str(user_id), 404
+    if repo.delete(entity_id) == -1:
+        return "Rejected. No user with id=" + str(entity_id), 404
     return 'Success. User deleted', 204
 
 
-@app.route('/user/<int:user_id>', methods=['PATCH'])
-def upd_user(user_id: int) -> (str, int):
+@app.route('/user/<int:entity_id>', methods=['PATCH'])
+def upd_entity(entity_id: int) -> (str, int):
     """
     Точка входа для запроса на изменение записи пользователя по id. Пример запроса:
     curl -X PATCH http://localhost:80/user/3?title=Aleksandr%20Sergeevich%20Pushkin
-    :param user_id: целочисленное значение id пользователя
+    :param entity_id: целочисленное значение id пользователя
     :аргумент запроса title: строковое значение ФИО пользователя
     :return: если пользователь не существует в базе, то возвращает код 422,
              иначе изменяет его данные и возвращает код 204
     """
     title = request.args.get('title')
-    entity = {'title': title, 'id': user_id}
+    entity = {'title': title, 'id': entity_id}
     result = repo.update(entity)
     if result == -1:
-        return "Rejected. No user with id=" + str(user_id), 404
+        return "Rejected. No user with id=" + str(entity_id), 404
     return 'Success. User updated', 204
 
 
